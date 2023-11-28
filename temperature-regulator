@@ -1,0 +1,114 @@
+let CONFIG = {
+  //check every 5 minutes
+  checkInterval: 5 * 60 * 1000,
+  insideTemperatureSensorId: 101,
+  outsideTemperatureSensorId: 100,
+  desiredTemperature: 12
+};
+
+let temperatures = ["insideT", "outsideT"];
+
+function isOutsideColder (){
+  if (temperatures[0] < temperatures[1]) {
+    console.log("Temperature inside [" + JSON.stringify(temperatures[0]) + "] is lower than outside temperature [" + JSON.stringify(temperatures[1]) + "] unable to cool down - OFF");
+    Shelly.call("Switch.set", {'id': 0, 'on': false});
+  } 
+  else {
+    console.log("Temperature inside [" + JSON.stringify(temperatures[0]) + "] is HIGHER than outside temperature [" + JSON.stringify(temperatures[1]) + "] will cool down - ON");
+    Shelly.call("Switch.set", {'id': 0, 'on': true});
+  }
+  temperatures[0] = '';
+  temperatures[1] = '';
+};
+
+
+function isOutsideHotter (){
+  if (temperatures[0] > temperatures[1]) {
+    console.log("Temperature inside [" + JSON.stringify(temperatures[0]) + "] is higher than outside temperature [" + JSON.stringify(temperatures[1]) + "] unable to heat up - OFF");
+    Shelly.call("Switch.set", {'id': 0, 'on': false});
+  } 
+  else {
+    console.log("Temperature inside [" + JSON.stringify(temperatures[0]) + "] is LOWER than outside temperature [" + JSON.stringify(temperatures[1]) + "] will heat up - ON");
+    Shelly.call("Switch.set", {'id': 0, 'on': true});
+  }
+  temperatures[0] = '';
+  temperatures[1] = '';
+};
+
+function shouldOperate(){
+  if (temperatures[0] > CONFIG.desiredTemperature) {
+    console.log("Inside [" + JSON.stringify(temperatures[0]) + "] is hotter than desired temperature [" + JSON.stringify(CONFIG.desiredTemperature) + "] will try to cool down");
+    isOutsideColder();
+  } else {
+    console.log("Inside [" + JSON.stringify(temperatures[0]) + "] is colder than desired temperature [" + JSON.stringify(CONFIG.desiredTemperature) + "] will try to heat up");
+    isOutsideHotter();
+  }
+}
+
+function isNumeric(str) {
+  if (typeof str === "number") {
+    //console.log("Variable [" + JSON.stringify(str) + "] IS a number");
+    return true;
+  } else {
+    //console.log("Variable [" + JSON.stringify(str) + "] not a number but a " + typeof str);
+    return false;
+  }
+}
+
+function bothTemperaturesRecorded() {
+   //console.log("Temperatures: " + JSON.stringify(temperatures));
+   if(isNumeric(temperatures[0]) && isNumeric(temperatures[1])) {
+      //console.log("Temperatures FULLY recorded");
+      return true;
+   }
+   else {
+      //console.log("Temperatures not recorded");
+  	  return false;
+   }
+  
+}
+
+function checkOutsideTemperature() {
+  Shelly.call(
+      "temperature.getStatus",
+      { id: CONFIG.outsideTemperatureSensorId},
+      function (response) {  
+        //console.log("Temperature OUTSIDE: " + JSON.stringify(response.tC));
+        temperatures[1] = response.tC;
+        if (bothTemperaturesRecorded()) {
+          shouldOperate();
+        }
+      },
+      null
+  );
+};
+
+function checkInsideTemperature() {
+  Shelly.call(
+      "temperature.getStatus",
+      { id: CONFIG.insideTemperatureSensorId},
+      function (response) {  
+        //console.log("Temperature INSIDE: " + JSON.stringify(response.tC));
+        temperatures[0] = response.tC;
+        if (bothTemperaturesRecorded()) {
+          isOutsideColder();
+        }
+      },
+      null
+  );
+};
+
+function timerCode() {
+  checkInsideTemperature();
+  checkOutsideTemperature();
+};
+
+Timer.set(
+  /* number of miliseconds */ CONFIG.checkInterval,
+  /* repeat? */ true,
+  /* callback */ 
+  function () {
+    //console.log("Checking temperatures");
+    timerCode();
+  }
+);
